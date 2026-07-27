@@ -286,8 +286,11 @@
     o.connect(g).connect(ctx.destination);
     o.start(t0); o.stop(t0+dur+0.02);
   }
-  function beepCount(){ tone(880,0.09,0,0.2); deafUntil = performance.now()+320; }
-  function beepDone(){ tone(880,0.1,0); tone(1174,0.1,0.13); tone(1568,0.28,0.26); deafUntil = performance.now()+900; }
+  function vibrate(pattern){
+    if(navigator.vibrate) navigator.vibrate(pattern);
+  }
+  function beepCount(){ tone(880,0.09,0,0.2); vibrate(40); deafUntil = performance.now()+320; }
+  function beepDone(){ tone(880,0.1,0); tone(1174,0.1,0.13); tone(1568,0.28,0.26); vibrate([50,60,50,60,150]); deafUntil = performance.now()+900; }
 
   /* ---------------- display ---------------- */
   function render(){
