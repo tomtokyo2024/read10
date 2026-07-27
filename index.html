@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>音読カウンター</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Old+Mincho:wght@400;700;900&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ai:#141E36;
+    --ai-2:#1E2B4A;
+    --ai-3:#2B3A5E;
+    --shu:#E1462A;
+    --kinari:#F0EBDD;
+    --seiji:#74B39C;
+    --mincho:"Zen Old Mincho","Hiragino Mincho ProN","Yu Mincho",serif;
+    --gothic:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--ai);
+    color:var(--kinari);
+    font-family:var(--gothic);
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+    padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+    -webkit-user-select:none;user-select:none;
+  }
+
+  /* ---------- header ---------- */
+  .bar{
+    flex:0 0 auto;
+    display:flex;align-items:baseline;justify-content:space-between;
+    padding:18px 22px 0;
+  }
+  .eyebrow{
+    font-family:var(--mincho);
+    font-size:15px;letter-spacing:.34em;
+    color:var(--kinari);opacity:.62;
+  }
+  .tune-btn{
+    background:none;border:0;color:var(--kinari);opacity:.5;
+    font-family:var(--gothic);font-size:12px;letter-spacing:.18em;
+    padding:6px 2px;cursor:pointer;
+  }
+  .tune-btn:focus-visible{outline:1px solid var(--seiji);outline-offset:3px;opacity:1}
+
+  /* ---------- stage ---------- */
+  .stage{
+    flex:1 1 auto;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:clamp(14px,4vh,34px);
+    min-height:0;
+    padding:0 22px;
+  }
+  .count-row{display:flex;align-items:baseline;gap:10px}
+  .count{
+    font-family:var(--mincho);font-weight:900;
+    font-size:clamp(96px,30vh,220px);
+    line-height:.82;
+    font-variant-numeric:tabular-nums;
+    transition:color .18s ease;
+  }
+  .count.hit{color:var(--shu)}
+  .target{
+    font-family:var(--mincho);
+    font-size:clamp(20px,4.4vh,34px);
+    opacity:.42;
+  }
+
+  /* ---------- 正 tally (signature) ---------- */
+  .tally{
+    display:flex;flex-wrap:wrap;justify-content:center;
+    gap:clamp(6px,2vw,14px);
+    max-width:420px;
+    min-height:clamp(44px,9vh,74px);
+  }
+  .tally svg{
+    width:clamp(38px,8.4vh,64px);height:auto;display:block;
+    overflow:visible;
+  }
+  .tally path{
+    fill:none;stroke:var(--shu);
+    stroke-width:9;stroke-linecap:square;
+    stroke-dasharray:var(--len);
+    stroke-dashoffset:var(--len);
+    transition:stroke-dashoffset .26s cubic-bezier(.2,.8,.3,1);
+  }
+  .tally path.on{stroke-dashoffset:0}
+  .tally svg.ghost path{stroke:var(--ai-3)}
+
+  /* ---------- meter ---------- */
+  .meter-wrap{width:100%;max-width:420px}
+  .meter{
+    position:relative;height:8px;border-radius:1px;
+    background:var(--ai-2);overflow:visible;
+  }
+  .meter .fill{
+    position:absolute;inset:0 auto 0 0;width:0%;
+    background:var(--seiji);border-radius:1px;
+    transition:width .06s linear;
+  }
+  .meter .fill.hot{background:var(--shu)}
+  .meter .mark{
+    position:absolute;top:-5px;bottom:-5px;width:2px;left:0%;
+    background:var(--kinari);opacity:.75;
+  }
+  .status{
+    display:flex;justify-content:space-between;align-items:baseline;
+    margin-top:10px;font-size:12px;letter-spacing:.14em;
+  }
+  .status .state{color:var(--seiji)}
+  .status .state.voice{color:var(--shu)}
+  .status .nums{opacity:.4;font-variant-numeric:tabular-nums;font-size:11px}
+
+  /* ---------- action ---------- */
+  .action{flex:0 0 auto;padding:0 22px 26px;display:flex;flex-direction:column;gap:14px;align-items:center}
+  .go{
+    width:100%;max-width:420px;
+    padding:22px;border:0;border-radius:2px;
+    background:var(--kinari);color:var(--ai);
+    font-family:var(--mincho);font-weight:700;
+    font-size:24px;letter-spacing:.3em;text-indent:.3em;
+    cursor:pointer;
+  }
+  .go.listening{background:transparent;color:var(--kinari);box-shadow:inset 0 0 0 1px var(--ai-3)}
+  .go:active{transform:translateY(1px)}
+  .go:focus-visible{outline:2px solid var(--seiji);outline-offset:3px}
+  .targets{display:flex;gap:0;max-width:420px;width:100%}
+  .targets button{
+    flex:1;padding:11px 0;background:none;border:0;
+    border-bottom:1px solid var(--ai-3);
+    color:var(--kinari);opacity:.38;
+    font-family:var(--mincho);font-size:15px;letter-spacing:.1em;cursor:pointer;
+  }
+  .targets button.sel{opacity:1;border-bottom-color:var(--shu)}
+  .hint{font-size:11.5px;opacity:.34;letter-spacing:.1em;text-align:center;line-height:1.6}
+  .hint.err{opacity:1;color:var(--shu)}
+
+  /* ---------- tune panel ---------- */
+  .panel{
+    position:fixed;left:0;right:0;bottom:0;
+    background:var(--ai-2);
+    padding:20px 22px calc(24px + env(safe-area-inset-bottom));
+    transform:translateY(101%);transition:transform .3s cubic-bezier(.2,.8,.3,1);
+    box-shadow:0 -1px 0 var(--ai-3);
+    z-index:10;
+  }
+  .panel.open{transform:translateY(0)}
+  .panel h2{
+    font-family:var(--mincho);font-size:13px;font-weight:400;
+    letter-spacing:.3em;opacity:.55;margin-bottom:16px;
+  }
+  .row{margin-bottom:16px}
+  .row label{display:flex;justify-content:space-between;font-size:12px;letter-spacing:.1em;margin-bottom:8px}
+  .row label span{opacity:.55;font-variant-numeric:tabular-nums}
+  input[type=range]{width:100%;accent-color:var(--shu);height:22px}
+  .toggle{display:flex;align-items:center;gap:10px;font-size:12px;letter-spacing:.1em;margin-bottom:18px}
+  .toggle input{accent-color:var(--shu);width:17px;height:17px}
+  .panel .close{
+    width:100%;padding:13px;background:none;border:1px solid var(--ai-3);
+    color:var(--kinari);font-family:var(--mincho);font-size:14px;letter-spacing:.28em;
+    border-radius:2px;cursor:pointer;
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{transition-duration:.01ms !important}
+  }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <div class="eyebrow">音読カウンター</div>
+  <button class="tune-btn" id="tuneBtn">調整</button>
+</div>
+
+<div class="stage">
+  <div class="count-row">
+    <div class="count" id="count">0</div>
+    <div class="target" id="targetLabel">/10</div>
+  </div>
+
+  <div class="tally" id="tally"></div>
+
+  <div class="meter-wrap">
+    <div class="meter">
+      <div class="fill" id="fill"></div>
+      <div class="mark" id="mark"></div>
+    </div>
+    <div class="status">
+      <div class="state" id="state">停止中</div>
+      <div class="nums" id="nums">—</div>
+    </div>
+  </div>
+</div>
+
+<div class="action">
+  <div class="targets" id="targets">
+    <button data-t="5">5</button>
+    <button data-t="10" class="sel">10</button>
+    <button data-t="20">20</button>
+    <button data-t="0">∞</button>
+  </div>
+  <button class="go" id="go">はじめる</button>
+  <div class="hint" id="hint">一文読んで、少し黙る。それを1回として数えます。</div>
+</div>
+
+<div class="panel" id="panel">
+  <h2>感度の調整</h2>
+  <div class="row">
+    <label>声とみなす音量差 <span id="vOnset"></span></label>
+    <input type="range" id="onset" min="3" max="24" step="1">
+  </div>
+  <div class="row">
+    <label>区切りとみなす無音の長さ <span id="vSil"></span></label>
+    <input type="range" id="silence" min="300" max="2500" step="50">
+  </div>
+  <div class="row">
+    <label>1回とみなす最短の発声 <span id="vMin"></span></label>
+    <input type="range" id="minv" min="100" max="1500" step="50">
+  </div>
+  <div class="toggle">
+    <input type="checkbox" id="ns"><label for="ns">ノイズ抑制をかける（騒がしい場所で試す）</label>
+  </div>
+  <button class="close" id="closeBtn">閉じる</button>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  /* ============ 正 の筆順（5画）============
+     ① 一 上の横  ② 丨 左の縦  ③ 一 中の横  ④ 丨 右の短い縦  ⑤ 一 下の横 */
+  const STROKES = [
+    'M14,18 H86',
+    'M33,18 V84',
+    'M33,53 H76',
+    'M76,53 V84',
+    'M14,84 H86'
+  ];
+
+  const P = {
+    onsetDelta: 10,     // dB above adaptive noise floor to be "voice"
+    silenceMs: 800,     // sustained quiet that closes one rep
+    minVoiceMs: 350,    // shortest utterance that counts (filters coughs/clicks)
+    noiseSuppression: false
+  };
+
+  const el = id => document.getElementById(id);
+  const ui = {
+    count: el('count'), targetLabel: el('targetLabel'), tally: el('tally'),
+    fill: el('fill'), mark: el('mark'), state: el('state'), nums: el('nums'),
+    go: el('go'), hint: el('hint'), targets: el('targets'),
+    panel: el('panel'), tuneBtn: el('tuneBtn'), closeBtn: el('closeBtn'),
+    onset: el('onset'), silence: el('silence'), minv: el('minv'), ns: el('ns'),
+    vOnset: el('vOnset'), vSil: el('vSil'), vMin: el('vMin')
+  };
+
+  let target = 10;
+  let count = 0;
+  let listening = false;
+  let ctx, stream, analyser, buf, rafId, wakeLock = null;
+
+  // detector state
+  let floor = -60;          // adaptive noise floor (dB)
+  let calibUntil = 0;
+  let calibSamples = [];
+  let voice = false;        // currently inside an utterance
+  let riseSince = 0;        // when level first crossed onset
+  let voiceStart = 0;
+  let quietSince = 0;
+  let deafUntil = 0;        // ignore input right after our own beep
+
+  const DB_MIN = -72, DB_MAX = -12;
+
+  /* ---------------- tally rendering ---------------- */
+  function buildTally(){
+    ui.tally.innerHTML = '';
+    const chars = target > 0 ? Math.ceil(target/5) : Math.max(2, Math.ceil((count+1)/5));
+    for(let c=0;c<chars;c++){
+      const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+      svg.setAttribute('viewBox','0 0 100 100');
+      svg.classList.add('ghost');
+      STROKES.forEach(d=>{
+        const p = document.createElementNS('http://www.w3.org/2000/svg','path');
+        p.setAttribute('d', d);
+        // dash length: generous constant covers every stroke in this glyph
+        p.style.setProperty('--len','120');
+        svg.appendChild(p);
+      });
+      ui.tally.appendChild(svg);
+    }
+    paintTally();
+  }
+
+  function paintTally(){
+    const svgs = [...ui.tally.children];
+    if(target === 0 && count >= svgs.length*5) { buildTally(); return; }
+    svgs.forEach((svg,i)=>{
+      const done = Math.max(0, Math.min(5, count - i*5));
+      svg.classList.toggle('ghost', done === 0);
+      [...svg.children].forEach((p,j)=> p.classList.toggle('on', j < done));
+    });
+  }
+
+  /* ---------------- sound feedback ---------------- */
+  function tone(freq, dur, delay, gainPeak){
+    if(!ctx) return;
+    const t0 = ctx.currentTime + (delay||0);
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sine'; o.frequency.value = freq;
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(gainPeak||0.22, t0+0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
+    o.connect(g).connect(ctx.destination);
+    o.start(t0); o.stop(t0+dur+0.02);
+  }
+  function beepCount(){ tone(880,0.09,0,0.2); deafUntil = performance.now()+320; }
+  function beepDone(){ tone(880,0.1,0); tone(1174,0.1,0.13); tone(1568,0.28,0.26); deafUntil = performance.now()+900; }
+
+  /* ---------------- display ---------------- */
+  function render(){
+    ui.count.textContent = count;
+    const hit = target>0 && count>=target;
+    ui.count.classList.toggle('hit', hit);
+    paintTally();
+  }
+
+  function setState(txt, isVoice){
+    ui.state.textContent = txt;
+    ui.state.classList.toggle('voice', !!isVoice);
+  }
+
+  /* ---------------- audio loop ---------------- */
+  function levelDb(){
+    analyser.getFloatTimeDomainData(buf);
+    let sum = 0;
+    for(let i=0;i<buf.length;i++) sum += buf[i]*buf[i];
+    const rms = Math.sqrt(sum/buf.length);
+    return 20*Math.log10(Math.max(rms, 1e-7));
+  }
+
+  function loop(){
+    rafId = requestAnimationFrame(loop);
+    const now = performance.now();
+    const db = levelDb();
+
+    // --- calibration window: learn the room ---
+    if(now < calibUntil){
+      calibSamples.push(db);
+      setState('環境音を測っています', false);
+      drawMeter(db);
+      return;
+    }
+    if(calibSamples.length){
+      calibSamples.sort((a,b)=>a-b);
+      floor = calibSamples[Math.floor(calibSamples.length*0.5)];
+      calibSamples = [];
+      setState('待機中', false);
+    }
+
+    const onT  = floor + P.onsetDelta;            // cross up to start
+    const offT = floor + P.onsetDelta*0.55;       // hysteresis: cross down to end
+    drawMeter(db, onT);
+
+    if(now < deafUntil){ return; }
+
+    // --- adapt the noise floor only while nothing is being said ---
+    if(!voice && db < onT){
+      const a = db < floor ? 0.06 : 0.008;        // drops fast, rises slow
+      floor = floor*(1-a) + db*a;
+    }
+
+    if(!voice){
+      if(db > onT){
+        if(!riseSince) riseSince = now;
+        if(now - riseSince >= 60){                // 60ms debounce on onset
+          voice = true; voiceStart = riseSince; quietSince = 0;
+          setState('聞いています', true);
+        }
+      } else {
+        riseSince = 0;
+      }
+    } else {
+      if(db < offT){
+        if(!quietSince) quietSince = now;
+        const spoken = quietSince - voiceStart;
+        if(now - quietSince >= P.silenceMs){
+          voice = false; riseSince = 0;
+          if(spoken >= P.minVoiceMs) commit();
+          else setState('短すぎたので数えません', false);
+          quietSince = 0;
+        }
+      } else {
+        quietSince = 0;
+      }
+    }
+  }
+
+  function commit(){
+    if(target>0 && count>=target){ setState('完了', false); return; }
+    count++;
+    render();
+    if(target>0 && count>=target){ beepDone(); setState('完了', false); }
+    else { beepCount(); setState('待機中', false); }
+  }
+
+  function drawMeter(db, onT){
+    const pct = v => Math.max(0, Math.min(100, (v-DB_MIN)/(DB_MAX-DB_MIN)*100));
+    ui.fill.style.width = pct(db)+'%';
+    if(onT!==undefined){
+      ui.mark.style.left = pct(onT)+'%';
+      ui.fill.classList.toggle('hot', db > onT);
+      ui.nums.textContent = `${db.toFixed(0)} / 底 ${floor.toFixed(0)} / 境 ${onT.toFixed(0)} dB`;
+    }
+  }
+
+  /* ---------------- start / stop ---------------- */
+  async function start(){
+    try{
+      ctx = new (window.AudioContext||window.webkitAudioContext)();
+      await ctx.resume();
+      stream = await navigator.mediaDevices.getUserMedia({audio:{
+        echoCancellation:false,
+        autoGainControl:false,              // must stay off: we compare levels
+        noiseSuppression:P.noiseSuppression
+      }});
+      const src = ctx.createMediaStreamSource(stream);
+      analyser = ctx.createAnalyser();
+      analyser.fftSize = 1024;
+      analyser.smoothingTimeConstant = 0;
+      buf = new Float32Array(analyser.fftSize);
+      src.connect(analyser);
+
+      listening = true;
+      count = 0; voice = false; riseSince = 0; quietSince = 0; deafUntil = 0;
+      floor = -60; calibSamples = []; calibUntil = performance.now()+800;
+      render();
+      ui.go.textContent = 'やり直す';
+      ui.go.classList.add('listening');
+      ui.hint.textContent = '画面を見なくても、音で1回ごとに知らせます。';
+      ui.hint.classList.remove('err');
+      keepAwake();
+      loop();
+    }catch(e){
+      ui.hint.textContent = 'マイクを使えません。HTTPS のページで開き、マイクを許可してください。';
+      ui.hint.classList.add('err');
+    }
+  }
+
+  function reset(){
+    count = 0; voice = false; riseSince = 0; quietSince = 0;
+    calibSamples = []; calibUntil = performance.now()+500;
+    render();
+    setState('環境音を測っています', false);
+  }
+
+  async function keepAwake(){
+    try{ if('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); }catch(e){}
+  }
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.visibilityState==='visible' && listening) keepAwake();
+  });
+
+  /* ---------------- wiring ---------------- */
+  ui.go.addEventListener('click', ()=> listening ? reset() : start());
+
+  ui.targets.addEventListener('click', e=>{
+    const b = e.target.closest('button'); if(!b) return;
+    target = +b.dataset.t;
+    [...ui.targets.children].forEach(x=>x.classList.toggle('sel', x===b));
+    ui.targetLabel.textContent = target>0 ? '/'+target : '';
+    buildTally(); render();
+  });
+
+  ui.tuneBtn.addEventListener('click', ()=> ui.panel.classList.add('open'));
+  ui.closeBtn.addEventListener('click', ()=> ui.panel.classList.remove('open'));
+
+  function bindSlider(input, key, label, fmt){
+    input.value = P[key];
+    label.textContent = fmt(P[key]);
+    input.addEventListener('input', ()=>{
+      P[key] = +input.value;
+      label.textContent = fmt(P[key]);
+    });
+  }
+  bindSlider(ui.onset,   'onsetDelta', ui.vOnset, v=>'+'+v+' dB');
+  bindSlider(ui.silence, 'silenceMs',  ui.vSil,   v=>(v/1000).toFixed(2)+' 秒');
+  bindSlider(ui.minv,    'minVoiceMs', ui.vMin,   v=>(v/1000).toFixed(2)+' 秒');
+
+  ui.ns.checked = P.noiseSuppression;
+  ui.ns.addEventListener('change', ()=>{
+    P.noiseSuppression = ui.ns.checked;
+    if(listening){
+      cancelAnimationFrame(rafId);
+      stream.getTracks().forEach(t=>t.stop());
+      ctx.close(); listening = false;
+      start();
+    }
+  });
+
+  buildTally(); render(); setState('停止中', false);
+})();
+</script>
+</body>
+</html>
