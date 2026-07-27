@@ -51,18 +51,42 @@
   }
   .tune-btn:focus-visible{outline:1px solid var(--seiji);outline-offset:3px;opacity:1}
 
+  /* ---------- read text box ---------- */
+  .read-wrap{
+    flex:0 0 auto;
+    padding:14px 22px 0;
+  }
+  .readbox{
+    display:block;
+    width:100%;max-width:420px;margin:0 auto;
+    height:7.5em;
+    background:var(--ai-2);
+    color:var(--kinari);
+    border:1px solid var(--ai-3);
+    border-radius:2px;
+    padding:14px;
+    font-family:var(--mincho);
+    font-size:30px;
+    line-height:1.5;
+    resize:none;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+  .readbox::placeholder{color:var(--kinari);opacity:.34}
+  .readbox:focus-visible{outline:1px solid var(--seiji);outline-offset:2px}
+
   /* ---------- stage ---------- */
   .stage{
     flex:1 1 auto;
-    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
     gap:clamp(14px,4vh,34px);
     min-height:0;
-    padding:0 22px;
+    padding:clamp(14px,4vh,34px) 22px 0;
   }
   .count-row{display:flex;align-items:baseline;gap:10px}
   .count{
     font-family:var(--mincho);font-weight:900;
-    font-size:clamp(96px,30vh,220px);
+    font-size:clamp(32px,8vh,56px);
     line-height:.82;
     font-variant-numeric:tabular-nums;
     transition:color .18s ease;
@@ -70,30 +94,9 @@
   .count.hit{color:var(--shu)}
   .target{
     font-family:var(--mincho);
-    font-size:clamp(20px,4.4vh,34px);
+    font-size:clamp(16px,3vh,22px);
     opacity:.42;
   }
-
-  /* ---------- 正 tally (signature) ---------- */
-  .tally{
-    display:flex;flex-wrap:wrap;justify-content:center;
-    gap:clamp(6px,2vw,14px);
-    max-width:420px;
-    min-height:clamp(44px,9vh,74px);
-  }
-  .tally svg{
-    width:clamp(38px,8.4vh,64px);height:auto;display:block;
-    overflow:visible;
-  }
-  .tally path{
-    fill:none;stroke:var(--shu);
-    stroke-width:9;stroke-linecap:square;
-    stroke-dasharray:var(--len);
-    stroke-dashoffset:var(--len);
-    transition:stroke-dashoffset .26s cubic-bezier(.2,.8,.3,1);
-  }
-  .tally path.on{stroke-dashoffset:0}
-  .tally svg.ghost path{stroke:var(--ai-3)}
 
   /* ---------- meter ---------- */
   .meter-wrap{width:100%;max-width:420px}
@@ -180,13 +183,15 @@
   <button class="tune-btn" id="tuneBtn">調整</button>
 </div>
 
+<div class="read-wrap">
+  <textarea class="readbox" id="readText" placeholder="ここに読みたい文章を貼り付け" spellcheck="false"></textarea>
+</div>
+
 <div class="stage">
   <div class="count-row">
     <div class="count" id="count">0</div>
     <div class="target" id="targetLabel">/10</div>
   </div>
-
-  <div class="tally" id="tally"></div>
 
   <div class="meter-wrap">
     <div class="meter">
@@ -235,16 +240,6 @@
 (function(){
   'use strict';
 
-  /* ============ 正 の筆順（5画）============
-     ① 一 上の横  ② 丨 左の縦  ③ 一 中の横  ④ 丨 右の短い縦  ⑤ 一 下の横 */
-  const STROKES = [
-    'M14,18 H86',
-    'M33,18 V84',
-    'M33,53 H76',
-    'M76,53 V84',
-    'M14,84 H86'
-  ];
-
   const P = {
     onsetDelta: 10,     // dB above adaptive noise floor to be "voice"
     silenceMs: 800,     // sustained quiet that closes one rep
@@ -254,7 +249,7 @@
 
   const el = id => document.getElementById(id);
   const ui = {
-    count: el('count'), targetLabel: el('targetLabel'), tally: el('tally'),
+    count: el('count'), targetLabel: el('targetLabel'),
     fill: el('fill'), mark: el('mark'), state: el('state'), nums: el('nums'),
     go: el('go'), hint: el('hint'), targets: el('targets'),
     panel: el('panel'), tuneBtn: el('tuneBtn'), closeBtn: el('closeBtn'),
@@ -279,36 +274,6 @@
 
   const DB_MIN = -72, DB_MAX = -12;
 
-  /* ---------------- tally rendering ---------------- */
-  function buildTally(){
-    ui.tally.innerHTML = '';
-    const chars = target > 0 ? Math.ceil(target/5) : Math.max(2, Math.ceil((count+1)/5));
-    for(let c=0;c<chars;c++){
-      const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
-      svg.setAttribute('viewBox','0 0 100 100');
-      svg.classList.add('ghost');
-      STROKES.forEach(d=>{
-        const p = document.createElementNS('http://www.w3.org/2000/svg','path');
-        p.setAttribute('d', d);
-        // dash length: generous constant covers every stroke in this glyph
-        p.style.setProperty('--len','120');
-        svg.appendChild(p);
-      });
-      ui.tally.appendChild(svg);
-    }
-    paintTally();
-  }
-
-  function paintTally(){
-    const svgs = [...ui.tally.children];
-    if(target === 0 && count >= svgs.length*5) { buildTally(); return; }
-    svgs.forEach((svg,i)=>{
-      const done = Math.max(0, Math.min(5, count - i*5));
-      svg.classList.toggle('ghost', done === 0);
-      [...svg.children].forEach((p,j)=> p.classList.toggle('on', j < done));
-    });
-  }
-
   /* ---------------- sound feedback ---------------- */
   function tone(freq, dur, delay, gainPeak){
     if(!ctx) return;
@@ -329,7 +294,6 @@
     ui.count.textContent = count;
     const hit = target>0 && count>=target;
     ui.count.classList.toggle('hit', hit);
-    paintTally();
   }
 
   function setState(txt, isVoice){
@@ -476,7 +440,7 @@
     target = +b.dataset.t;
     [...ui.targets.children].forEach(x=>x.classList.toggle('sel', x===b));
     ui.targetLabel.textContent = target>0 ? '/'+target : '';
-    buildTally(); render();
+    render();
   });
 
   ui.tuneBtn.addEventListener('click', ()=> ui.panel.classList.add('open'));
@@ -505,7 +469,7 @@
     }
   });
 
-  buildTally(); render(); setState('停止中', false);
+  render(); setState('停止中', false);
 })();
 </script>
 </body>
